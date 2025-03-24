@@ -1,0 +1,4 @@
+git+https://github.com/saleweaver/python-sp-api.git
+python-dotenv
+pymysql
+pandas
