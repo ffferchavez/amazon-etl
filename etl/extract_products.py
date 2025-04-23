@@ -10,23 +10,26 @@ load_dotenv()
 
 def fetch_products(seller_skus=None):
     try:
-        print("Fetching products from Amazon...")
+        print("🛍️ Fetching products from Amazon...")
 
-        # Example with SKUs — I have to pass a list or fetch dynamically
+        marketplace_code = os.getenv("AMAZON_MARKETPLACE", "US").upper()
+        marketplace = getattr(Marketplaces, marketplace_code)
+        seller_id = os.getenv("SP_API_SELLER_ID")
+
         skus = seller_skus or ["SKU-001", "SKU-002"]
 
         products = []
         for sku in skus:
-            result = ListingsItems(marketplace=Marketplaces.US).get_listings_item(
-                sellerId=os.getenv("SP_API_SELLER_ID"),  # if required
+            result = ListingsItems(marketplace=marketplace).get_listings_item(
+                sellerId=seller_id,
                 sku=sku,
                 includedData=["attributes", "summaries", "issues", "fulfillmentAvailability"]
             )
             products.append(result.payload)
 
-        print(f"Fetched {len(products)} products.")
+        print(f"✅ Fetched {len(products)} products.")
         return products
 
     except SellingApiException as e:
-        print("Amazon SP API error while fetching products:", e)
+        print("❌ Amazon SP API error while fetching products:", e)
         return []

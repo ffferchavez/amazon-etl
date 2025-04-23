@@ -10,17 +10,25 @@ load_dotenv()
 
 def fetch_orders():
     try:
-        print("Fetching orders from Amazon...")
+        print("📦 Fetching orders from Amazon...")
 
-        orders_api = Orders(marketplace=Marketplaces.US)
-        # Example of expanded parameters for production:
-        # response = orders_api.get_orders(CreatedAfter='2024-01-01T00:00:00Z', MarketplaceIds=['ATVPDKIKX0DER'], OrderStatuses=['Shipped', 'Unshipped'])
-        response = orders_api.get_orders(CreatedAfter='2024-01-01T00:00:00Z')
+        marketplace_code = os.getenv("AMAZON_MARKETPLACE", "US").upper()
+        created_after = os.getenv("CREATED_AFTER", "2024-01-01T00:00:00Z")
+        marketplace = getattr(Marketplaces, marketplace_code)
 
+        orders_api = Orders(marketplace=marketplace)
+        response = orders_api.get_orders(CreatedAfter=created_after)
         orders = response.payload.get("Orders", [])
-        print(f"Fetched {len(orders)} orders.")
+
+        while "NextToken" in response.payload:
+            next_token = response.payload["NextToken"]
+            print("➡️ Fetching next page of orders...")
+            response = orders_api.get_orders(NextToken=next_token)
+            orders.extend(response.payload.get("Orders", []))
+
+        print(f"✅ Fetched {len(orders)} orders.")
         return orders
 
     except SellingApiException as e:
-        print("Amazon SP API error:", e)
+        print("❌ Amazon SP API error:", e)
         return []

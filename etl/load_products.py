@@ -1,51 +1,43 @@
-import pymysql
+import psycopg2
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# This inserts product data into MySQL, currently using mock data.
-# real SP API product structure:
-# {
-#     'asin': 'B08XYZ1234',
-#     'sku': 'SKU-001',
-#     'product_title': 'Wireless Mouse',
-#     'price': 19.99,
-#     'currency_code': 'USD',
-#     'stock_quantity': 85,
-#     'last_updated': '2024-03-24 12:00:00'
-# }
-
 def insert_products_to_db(products):
-    conn = pymysql.connect(
-        host=os.getenv("MYSQL_HOST"),
-        user=os.getenv("MYSQL_USER"),
-        password=os.getenv("MYSQL_PASSWORD"),
-        database=os.getenv("MYSQL_DB"),
-        port=int(os.getenv("MYSQL_PORT"))
+    conn = psycopg2.connect(
+        host=os.getenv("PG_HOST"),
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD"),
+        dbname=os.getenv("PG_DB"),
+        port=int(os.getenv("PG_PORT")),
+        sslmode="require"
     )
     cursor = conn.cursor()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS amazon_products (
+            id SERIAL PRIMARY KEY,
+            asin TEXT,
+            sku TEXT,
+            product_title TEXT,
+            price NUMERIC,
+            currency_code TEXT,
+            stock_quantity INTEGER,
+            last_updated TIMESTAMP
+        );
+    """)
+
     for product in products:
-        # real SP API product:
-        # {
-        #     'asin': 'B08XYZ1234',
-        #     'sku': 'SKU-001',
-        #     'product_title': 'Wireless Mouse',
-        #     'price': 19.99,
-        #     'currency_code': 'USD',
-        #     'stock_quantity': 85,
-        #     'last_updated': '2024-03-24 12:00:00'
-        # }
         cursor.execute("""
             INSERT INTO amazon_products (
                 asin, sku, product_title, price, currency_code, stock_quantity, last_updated
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                price = VALUES(price),
-                currency_code = VALUES(currency_code),
-                stock_quantity = VALUES(stock_quantity),
-                last_updated = VALUES(last_updated)
+            ON CONFLICT (sku) DO UPDATE SET
+                price = EXCLUDED.price,
+                currency_code = EXCLUDED.currency_code,
+                stock_quantity = EXCLUDED.stock_quantity,
+                last_updated = EXCLUDED.last_updated;
         """, (
             product['asin'],
             product['sku'],
@@ -59,4 +51,4 @@ def insert_products_to_db(products):
     conn.commit()
     cursor.close()
     conn.close()
-    print(f"Inserted or updated {len(products)} products in MySQL.")
+    print(f"✅ Inserted or updated {len(products)} products in PostgreSQL.")

@@ -1,44 +1,38 @@
-import pymysql
+import psycopg2
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# This loads Amazon order data into MySQL, currently using mock data for testing.
-# real SP API order data:
-# {
-#     'amazon_order_id': '123-1234567-1234567',
-#     'order_status': 'Shipped',
-#     'purchase_date': '2024-03-01 12:00:00',
-#     'buyer_email': 'example@marketplace.amazon.com',
-#     'order_total': 59.99,
-#     'currency_code': 'USD'
-# }
-
 def insert_orders_to_db(orders):
-    conn = pymysql.connect(
-        host=os.getenv("MYSQL_HOST"),
-        user=os.getenv("MYSQL_USER"),
-        password=os.getenv("MYSQL_PASSWORD"),
-        database=os.getenv("MYSQL_DB"),
-        port=int(os.getenv("MYSQL_PORT"))
+    conn = psycopg2.connect(
+        host=os.getenv("PG_HOST"),
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD"),
+        dbname=os.getenv("PG_DB"),
+        port=int(os.getenv("PG_PORT")),
+        sslmode="require"
     )
     cursor = conn.cursor()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS amazon_orders (
+            id SERIAL PRIMARY KEY,
+            amazon_order_id TEXT UNIQUE,
+            order_status TEXT,
+            purchase_date TIMESTAMP,
+            buyer_email TEXT,
+            order_total NUMERIC,
+            currency_code TEXT
+        );
+    """)
+
     for order in orders:
-        # real SP API order:
-        # {
-        #     'amazon_order_id': '123-1234567-1234567',
-        #     'order_status': 'Shipped',
-        #     'purchase_date': '2024-03-01 12:00:00',
-        #     'buyer_email': 'example@marketplace.amazon.com',
-        #     'order_total': 59.99,
-        #     'currency_code': 'USD'
-        # }
         cursor.execute("""
-            INSERT IGNORE INTO amazon_orders (
+            INSERT INTO amazon_orders (
                 amazon_order_id, order_status, purchase_date, buyer_email, order_total, currency_code
             ) VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (amazon_order_id) DO NOTHING;
         """, (
             order['amazon_order_id'],
             order['order_status'],
@@ -51,4 +45,4 @@ def insert_orders_to_db(orders):
     conn.commit()
     cursor.close()
     conn.close()
-    print(f"Inserted {len(orders)} orders into MySQL.")
+    print(f"✅ Inserted {len(orders)} orders into PostgreSQL.")

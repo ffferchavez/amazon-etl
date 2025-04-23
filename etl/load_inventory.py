@@ -1,18 +1,31 @@
-import pymysql
+import psycopg2
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 def insert_inventory_to_db(inventory):
-    conn = pymysql.connect(
-        host=os.getenv("MYSQL_HOST"),
-        user=os.getenv("MYSQL_USER"),
-        password=os.getenv("MYSQL_PASSWORD"),
-        database=os.getenv("MYSQL_DB"),
-        port=int(os.getenv("MYSQL_PORT"))
+    conn = psycopg2.connect(
+        host=os.getenv("PG_HOST"),
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD"),
+        dbname=os.getenv("PG_DB"),
+        port=int(os.getenv("PG_PORT")),
+        sslmode="require"
     )
     cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS amazon_inventory (
+            id SERIAL PRIMARY KEY,
+            asin TEXT,
+            sku TEXT,
+            fulfillment_center TEXT,
+            condition_type TEXT,
+            quantity INTEGER,
+            last_updated TIMESTAMP
+        );
+    """)
 
     for item in inventory:
         cursor.execute("""
@@ -31,4 +44,4 @@ def insert_inventory_to_db(inventory):
     conn.commit()
     cursor.close()
     conn.close()
-    print(f"Inserted {len(inventory)} inventory records into MySQL.")
+    print(f"✅ Inserted {len(inventory)} inventory records into PostgreSQL.")
