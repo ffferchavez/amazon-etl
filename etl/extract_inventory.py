@@ -3,32 +3,34 @@
 
 import os
 from dotenv import load_dotenv
-from sp_api.api.inventory.inventory import Inventory
+from sp_api.api.inventory import Inventory
 from sp_api.base import Marketplaces, SellingApiException
 
 load_dotenv()
 
-def fetch_inventory(seller_skus=None):
+def fetch_inventory():
     try:
         print("📦 Fetching inventory from Amazon...")
 
-        skus = seller_skus or ["SKU-001", "SKU-002"]
-
         inventory = []
-        marketplace = os.getenv("AMAZON_MARKETPLACE", "US").upper()
+        marketplace = os.getenv("AMAZON_MARKETPLACE", "DE").upper()
         inventory_api = Inventory(marketplace=getattr(Marketplaces, marketplace))
 
-        for sku in skus:
-            result = inventory_api.get_inventory_summary(sku=sku)
-            data = result.payload
+        response = inventory_api.get_inventory_summary()
+        summaries = response.payload.get("inventorySummaries", [])
+        inventory.extend(summaries)
 
-            # Flatten inventoryDetails
-            details = data.get("inventoryDetails", {})
-            data["fulfillment_center"] = details.get("fulfillmentCenterId")
-            data["condition_type"] = details.get("condition")
-            data["quantity"] = data.get("totalQuantity", 0)
+        while "nextToken" in response.payload:
+            print("🔁 Fetching next page...")
+            response = inventory_api.get_inventory_summary(nextToken=response.payload["nextToken"])
+            inventory.extend(response.payload.get("inventorySummaries", []))
 
-            inventory.append(data)
+        # Enrich and flatten
+        for item in inventory:
+            details = item.get("inventoryDetails", {})
+            item["fulfillment_center"] = details.get("fulfillmentCenterId")
+            item["condition_type"] = details.get("condition")
+            item["quantity"] = item.get("totalQuantity", 0)
 
         print(f"✅ Fetched {len(inventory)} inventory records.")
         return inventory
@@ -47,3 +49,13 @@ def fetch_inventory(seller_skus=None):
 #     "condition": "NewItem"
 #   }
 # }
+
+if __name__ == "__main__":
+    inventory_data = fetch_inventory()
+    
+    os.makedirs("amazon-fetched", exist_ok=True)
+    with open("amazon-fetched/inventory.json", "w", encoding="utf-8") as f:
+        import json
+        json.dump({"payload": {"inventorySummaries": inventory_data}}, f, ensure_ascii=False, indent=2)
+
+    print(f"📁 Saved inventory snapshot to amazon-fetched/inventory.json")
