@@ -1,4 +1,5 @@
-git+https://github.com/saleweaver/python-sp-api.git
-python-dotenv
-pymysql
+git+https://github.com/saleweaver/python-amazon-sp-api.git@master
 pandas
+psycopg2-binary
+python-dotenv
+boto3
