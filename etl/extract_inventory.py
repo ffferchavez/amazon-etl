@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import boto3
 from sp_api.api import Inventories
+from sp_api.api import ListingsItems
 from sp_api.base import SellingApiException, Marketplaces
 from datetime import datetime
 
@@ -75,6 +76,31 @@ def fetch_inventory_for_marketplace(marketplace, country_code):
         print(f"❌ {country_code} failed: {e}")
         return []
 
+def enrich_inventory_with_asins(marketplace, country_code, inventory):
+    try:
+        print(f"\n🔍 Enriching ASINs for {country_code}...")
+        credentials = get_spapi_credentials()
+        listings_api = ListingsItems(marketplace=marketplace, credentials=credentials)
+        enriched = []
+
+        for item in inventory:
+            sku = item.get("sellerSku")
+            if item.get("asin"):
+                enriched.append(item)
+                continue
+            try:
+                response = listings_api.get_listings_item(sellerSku=sku, marketplaceIds=[marketplace.marketplace_id])
+                asin = response.payload.get("asin")
+                item["asin"] = asin
+            except Exception as inner:
+                print(f"⚠️ Could not fetch ASIN for SKU {sku}: {inner}")
+            enriched.append(item)
+
+        return enriched
+    except Exception as e:
+        print(f"❌ ASIN enrichment failed for {country_code}: {e}")
+        return inventory
+
 def run_daily_inventory_report():
     print(f"\n📦 Daily Amazon FBA Inventory Report - {datetime.now().strftime('%Y-%m-%d')}")
     print("=" * 60)
@@ -82,24 +108,17 @@ def run_daily_inventory_report():
     all_inventory = []
     for country, marketplace in EU_MARKETPLACES.items():
         inv = fetch_inventory_for_marketplace(marketplace, country)
-        all_inventory.extend(inv)
+        if not inv:
+            continue
+        enriched_inv = enrich_inventory_with_asins(marketplace, country, inv)
+        all_inventory.extend(enriched_inv)
 
     if not all_inventory:
         print("⚠️ No inventory data returned.")
         return []
 
-    print("\n📊 Sample Items:")
-    for item in all_inventory[:5]:
-        sku = item.get("sellerSku", "N/A")
-        asin = item.get("asin", "N/A")
-        qty = item.get("totalQuantity", 0)
-        fc = item.get("fulfillmentCenterId", "N/A")
-        country = item.get("country", "N/A")
-        print(f"- [{country}] SKU: {sku}, ASIN: {asin}, Qty: {qty}, FC: {fc}")
-
-    print(f"\n✅ Total SKUs across EU: {len(all_inventory)}")
+    print(f"\n✅ Total enriched inventory items: {len(all_inventory)}")
     print("=" * 60)
-
     return all_inventory
 
 if __name__ == "__main__":
